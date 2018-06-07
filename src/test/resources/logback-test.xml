@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <!-- Print the date in ISO 8601 format -->
+      <pattern>%d [%t] %-5p %c - %m%n</pattern>
+    </encoder>
+  </appender>
+  
+  <!--
+  <logger name="org.springframework" level="info" />
+  <logger name="org.springframework.transaction" level="all" />
+  -->
+
+  <root level="info">
+    <appender-ref ref="stdout"/>
+  </root>
+</configuration>
