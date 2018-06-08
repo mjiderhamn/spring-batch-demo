@@ -1,8 +1,6 @@
 package se.jiderhamn;
 
 import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.LocalTime;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -41,11 +39,6 @@ public class JobConfiguration {
 
   /** No of rows per database transaction */
   private static final int CHUNK_SIZE = 100;
-  
-  private static final LocalTime MIDNIGHT = LocalTime.of(0, 0);
-
-  @Autowired
-  private JobBuilderFactory jobs;
 
   @Autowired
   private StepBuilderFactory steps;
@@ -53,7 +46,7 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   
   @Bean(name = JOB_PARSE_CALL_LOG)
-  protected Job parseCallLogJob() {
+  protected Job parseCallLogJob(JobBuilderFactory jobs) {
     return jobs.get(JOB_PARSE_CALL_LOG)
         // .preventRestart()
         .validator(new DefaultJobParametersValidator(new String[] {"filePath"}, new String[] {"manualApproval"}))
@@ -166,7 +159,7 @@ public class JobConfiguration {
 
           @Override
           public ExitStatus afterStep(StepExecution stepExecution) {
-            return null; // TODO Example with non-null
+            return null;
           }
         })
         .build();
@@ -177,11 +170,8 @@ public class JobConfiguration {
         .name("callLogReader")
         .resource(new FileSystemResource(filePath))
         .delimited().delimiter("|")
-        .names(new String[] {"from", "to", "duration"})
-        .fieldSetMapper(fieldSet -> new PhoneCall(
-            fieldSet.readString("from"), 
-            fieldSet.readString("to"),
-            Duration.between(MIDNIGHT, LocalTime.parse(fieldSet.readString("duration")))))
+        .names(new String[] {"fromSubscriber", "toSubscriber", "duration"})
+        .targetType(PhoneCall.class)
         .build();
   }
 
@@ -268,7 +258,7 @@ public class JobConfiguration {
     return steps.get("sendBills")
         .<Bill, Bill>chunk(CHUNK_SIZE)
         .reader(new ListItemReader<>(BillDAO.findAll()))
-        .processor((ItemProcessor<Bill, Bill>) Bill::send)
+        .processor((ItemProcessor<Bill, Bill>) Bill::send) // TODO Idempotent
         .writer(items -> { }) // No writing - storing is expected to happen in processor
         .listener(new ItemReadListener<Bill>() {
           @Override
