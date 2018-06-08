@@ -18,7 +18,7 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 @EnableBatchProcessing
 public class BatchTestConfiguration extends DefaultBatchConfigurer {
   
-  private static final Logger LOG = LoggerFactory.getLogger(BatchTestConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger("TX");
 
   private final PlatformTransactionManager transactionManager = new AbstractPlatformTransactionManager() {
     @Override
