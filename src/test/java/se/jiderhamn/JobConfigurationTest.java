@@ -1,19 +1,23 @@
 package se.jiderhamn;
 
-import java.io.File;
-import java.net.URISyntaxException;
-import java.util.List;
-import javax.annotation.Resource;
-
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.springframework.batch.core.*;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+
+import java.io.File;
+import java.net.URISyntaxException;
+import java.util.List;
+import javax.annotation.Resource;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,8 +30,6 @@ import static org.junit.Assert.assertTrue;
 @ContextConfiguration(classes = {BatchTestConfiguration.class, JobConfiguration.class})
 public class JobConfigurationTest {
   
-  // TODO Rename everything
-
   @Autowired
   private JobLauncher jobLauncher;
   
@@ -37,6 +39,7 @@ public class JobConfigurationTest {
   @Before
   public void setUp() {
     BillDAO.reset();
+    PhoneCallDAO.reset();
   }
   
   private String getPath(String resource) throws URISyntaxException {
@@ -57,6 +60,7 @@ public class JobConfigurationTest {
 
     // Assert
     assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
+    assertEquals(7, PhoneCallDAO.findAll().size());
     final List<Bill> allBills = BillDAO.findAll();
     assertEquals(3, allBills.size());
     assertTrue(allBills.stream().allMatch(Bill::isSent));
@@ -64,7 +68,6 @@ public class JobConfigurationTest {
   
   @Test
   public void parseCallLog_manualConfirmationRequired() throws Exception {
-    // TODO Require manual acceptance
     final JobParameters jobParameters = new JobParametersBuilder()
         .addString("filePath", getPath("/basic.txt"))
         .addString("manualApproval", "true", true)
@@ -96,18 +99,17 @@ public class JobConfigurationTest {
   
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   
+  // TODO Larger file
   
   /** TODO Pretend exception is thrown during processing of file, such as invalid duration */
   @Ignore // TODO
   @Test
   public void exception_processing_input() throws Exception {
-    final long batchId = 5L;
-    
     // Arrange
 
     // Act
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
-        .addString("filePath", "L:\\sandbox\\spring-batch-demo\\src\\test\\resources\\basic.txt")
+        .addString("filePath", getPath("/basic.txt"))
         .toJobParameters());
 
 
@@ -133,13 +135,11 @@ public class JobConfigurationTest {
   @Ignore // TODO
   @Test
   public void exception_sending_bills() throws Exception {
-    final long batchId = 6L;
-    
     // Arrange
 
     // Act
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
-        .addString("filePath", "L:\\sandbox\\spring-batch-demo\\src\\test\\resources\\basic.txt")
+        .addString("filePath", getPath("/basic.txt"))
         .toJobParameters());
 
 

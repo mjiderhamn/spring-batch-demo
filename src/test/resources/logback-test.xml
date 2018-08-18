@@ -2,8 +2,8 @@
 <configuration>
   <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <!-- Print the date in ISO 8601 format -->
-      <pattern>%d [%t] %-5p %c - %m%n</pattern>
+      <!-- https://logback.qos.ch/manual/layouts.html %d Print the date in ISO 8601 format -->
+      <pattern>%-5level %logger - %m%n</pattern>
     </encoder>
   </appender>
   
@@ -11,6 +11,8 @@
   <logger name="org.springframework" level="info" />
   <logger name="org.springframework.transaction" level="all" />
   -->
+  <logger name="org.springframework.context.support.GenericApplicationContext" level="warn" />
+  <logger name="org.springframework.test" level="warn" />
 
   <root level="info">
     <appender-ref ref="stdout"/>

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import static java.util.Collections.unmodifiableList;
 import static java.util.stream.Collectors.toSet;
 
 /**
@@ -16,6 +17,10 @@ public class PhoneCallDAO {
 
   public static void persist(List<? extends PhoneCall> phoneCalls) {
     calls.addAll(phoneCalls);
+  }
+  
+  public static List<PhoneCall> findAll() {
+    return unmodifiableList(calls);
   }
   
   public static List<String> getSubscribers() {
@@ -32,5 +37,10 @@ public class PhoneCallDAO {
     return calls.stream()
         .filter(call -> subscriber.equals(call.getFromSubscriber()))
         .count();
+  }
+  
+  /** Reset fake repository for next text case */
+  public static void reset() {
+    calls.clear();
   }
 }

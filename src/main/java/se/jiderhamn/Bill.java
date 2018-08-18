@@ -34,4 +34,15 @@ public class Bill {
   public boolean isSent() {
     return sent;
   }
+
+  @Override
+  public String toString() {
+    return "Bill{" +
+        "subscriber='" + subscriber + '\'' +
+        ", noOfCalls=" + noOfCalls +
+        ", totalDuration=" + totalDuration +
+        ", amount=" + amount +
+        ", sent=" + sent +
+        '}';
+  }
 }

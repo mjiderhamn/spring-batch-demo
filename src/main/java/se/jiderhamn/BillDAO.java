@@ -13,6 +13,7 @@ public class BillDAO {
   
   private static List<Bill> bills = new ArrayList<>();
   
+  /** Reset fake repository for next text case */
   public static void reset() {
     bills.clear();
   }
