@@ -1,11 +1,18 @@
 package se.jiderhamn;
 
-import java.math.BigDecimal;
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.batch.core.*;
+import org.springframework.batch.core.ExitStatus;
+import org.springframework.batch.core.ItemProcessListener;
+import org.springframework.batch.core.ItemReadListener;
+import org.springframework.batch.core.ItemWriteListener;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobExecutionListener;
+import org.springframework.batch.core.SkipListener;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
@@ -25,6 +32,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.retry.backoff.ExponentialBackOffPolicy;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 /**
  * @author Mattias Jiderhamn
@@ -33,12 +45,9 @@ import org.springframework.core.io.FileSystemResource;
 @Configuration
 public class JobConfiguration {
 
-  private static final Logger LOG = LoggerFactory.getLogger(JobConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger("JobConfiguration");
   
   static final String JOB_PARSE_CALL_LOG = "parseCallLogJob";
-
-  /** No of rows per database transaction */
-  private static final int CHUNK_SIZE = 100;
 
   @Autowired
   private StepBuilderFactory steps;
@@ -61,14 +70,12 @@ public class JobConfiguration {
         .listener(new JobExecutionListener() {
           @Override
           public void beforeJob(JobExecution jobExecution) {
-            final String path = jobExecution.getJobParameters().getString("filePath");
-            LOG.info("Starting job {}, with file {}", jobExecution.getJobInstance(), path);
+            LOG.info("Starting job {}, with parameters {}", jobExecution.getJobInstance(), jobExecution.getJobParameters());
           }
 
           @Override
           public void afterJob(JobExecution jobExecution) {
             final String path = jobExecution.getJobParameters().getString("filePath");
-            // TODO Add job / execution ID to messages
             // NOTE! Comparison must be made on exitCode only, which compareTo() does
             if(ExitStatus.COMPLETED.compareTo(jobExecution.getExitStatus()) == 0) {
               LOG.info("Job completed successfully for file " + path);
@@ -94,10 +101,9 @@ public class JobConfiguration {
   @JobScope // Needed for @Value (Alternatively, @StepScope)
   Step readCallDataFromFile(@Value("#{jobParameters[filePath]}") String filePath) {
     return steps.get("readCallDataFromFile")
-        .<PhoneCall, PhoneCall>chunk(CHUNK_SIZE) // Commit-limit
+        .<PhoneCall, PhoneCall>chunk(100) // Commit-limit
         .faultTolerant()
           .skip(FlatFileParseException.class).skipLimit(10)
-//          .retry(SQLTimeoutException.class).retryLimit(10).backOffPolicy(new ExponentialBackOffPolicy())
         .reader(flatFileReader(filePath))
         .writer(PhoneCallDAO::persist)
         .listener(new ItemReadListener<PhoneCall> () {
@@ -179,36 +185,46 @@ public class JobConfiguration {
 
   @Bean
   @JobScope // Alternatively, @StepScope
-  protected Step createBills() { // TODO Parameterize month
+  protected Step createBills() {
     return steps.get("createBills")
-        .<String, Bill>chunk(CHUNK_SIZE)
+        .<String, Bill>chunk(100)
+        .faultTolerant()
+          .retry(TimeoutException.class)
+          .retryLimit(10)
+          .backOffPolicy(new ExponentialBackOffPolicy())
         .reader(new ListItemReader<>(PhoneCallDAO.getSubscribers()))
         .processor(createBillsProcessor())
-        .listener(new ItemProcessListener<PhoneCall, PhoneCall>() {
+        .listener(new ItemProcessListener<String, Bill>() {
           @Override
-          public void beforeProcess(PhoneCall item) {
+          public void beforeProcess(String item) {
             LOG.info("beforeProcess() " + item);
           }
 
           @Override
-          public void afterProcess(PhoneCall item, PhoneCall result) {
-            LOG.info("beforeProcess() " + item);
+          public void afterProcess(String item, Bill result) {
+            LOG.info("afterProcess() " + item + " => " + result);
           }
 
           @Override
-          public void onProcessError(PhoneCall item, Exception e) {
-            LOG.error("onProcessError() " + item, e);
+          public void onProcessError(String item, Exception e) {
+            if(e instanceof TimeoutException)
+              LOG.info("onProcessError: Timed out processing " + item + " - will retry");
+            else
+              LOG.error("onProcessError: " + item, e);
           }
         })
-        .writer(BillDAO::persist) // TODO noOp example?
+        .writer(BillDAO::persist)
         .build();
   }
 
   private ItemProcessor<? super String, ? extends Bill> createBillsProcessor() {
     return subscriber -> {
+      if(Math.random() < 0.5)
+        throw new TimeoutException();
+      
       final long noOfCalls = PhoneCallDAO.getTotalNoOfCallsFrom(subscriber);
       if(noOfCalls > 0) {
-        return new Bill(subscriber, noOfCalls, null, BigDecimal.TEN); // TODO
+        return new Bill(subscriber, noOfCalls, null, BigDecimal.TEN); // TODO Find total duration
       }
       else
         return null; // Skip
@@ -256,7 +272,7 @@ public class JobConfiguration {
   @JobScope
   Step sendBills() {
     return steps.get("sendBills")
-        .<Bill, Bill>chunk(CHUNK_SIZE)
+        .<Bill, Bill>chunk(100)
         .reader(new ListItemReader<>(BillDAO.findAll()))
         .processor((ItemProcessor<Bill, Bill>) Bill::send) // TODO Idempotent
         .writer(items -> { }) // No writing - storing is expected to happen in processor
