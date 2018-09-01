@@ -1,5 +1,6 @@
 package se.jiderhamn;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -37,6 +38,13 @@ public class PhoneCallDAO {
     return calls.stream()
         .filter(call -> subscriber.equals(call.getFromSubscriber()))
         .count();
+  }
+  
+  public static Duration getTotalDurationOfCallsFrom(String subscriber) {
+    return calls.stream()
+        .filter(call -> subscriber.equals(call.getFromSubscriber()))
+        .map(PhoneCall::getDuration)
+        .reduce(Duration::plus).orElse(null);
   }
   
   /** Reset fake repository for next text case */

@@ -8,6 +8,10 @@ import java.time.Duration;
  */
 @SuppressWarnings({"WeakerAccess", "FieldCanBeLocal", "unused"})
 public class Bill {
+
+  private static final BigDecimal COST_PER_CALL = new BigDecimal("0.5");
+  
+  private static final BigDecimal COST_PER_SECOND = new BigDecimal("0.0125");
   
   private String subscriber;
   
@@ -19,11 +23,12 @@ public class Bill {
   
   private boolean sent = false;
 
-  public Bill(String subscriber, long noOfCalls, Duration totalDuration, BigDecimal amount) {
+  public Bill(String subscriber, long noOfCalls, Duration totalDuration) {
     this.subscriber = subscriber;
     this.noOfCalls = noOfCalls;
     this.totalDuration = totalDuration;
-    this.amount = amount;
+    this.amount = COST_PER_CALL.multiply(new BigDecimal(noOfCalls))
+                .add(COST_PER_SECOND.multiply(new BigDecimal(totalDuration.getSeconds())));
   }
 
   public Bill send() {

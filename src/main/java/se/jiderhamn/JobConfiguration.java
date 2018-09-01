@@ -34,7 +34,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 
-import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
@@ -224,7 +224,8 @@ public class JobConfiguration {
       
       final long noOfCalls = PhoneCallDAO.getTotalNoOfCallsFrom(subscriber);
       if(noOfCalls > 0) {
-        return new Bill(subscriber, noOfCalls, null, BigDecimal.TEN); // TODO Find total duration
+        final Duration totalDuration = PhoneCallDAO.getTotalDurationOfCallsFrom(subscriber);
+        return new Bill(subscriber, noOfCalls, totalDuration);
       }
       else
         return null; // Skip

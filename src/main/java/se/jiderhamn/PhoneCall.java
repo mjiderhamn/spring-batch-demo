@@ -15,8 +15,6 @@ public class PhoneCall {
   
   private String toSubscriber;
   
-  // TODO Start to have limit
-  
   private Duration duration;
 
   public PhoneCall() {
