@@ -47,18 +47,26 @@ public class JobConfigurationTest {
   }
 
   @Test
-  public void parseCallLog() throws Exception {
-    // Arrange
-    // TODO
-
-    // Act
+  public void parseSmallCallLog() throws Exception {
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
         .addString("filePath", getPath("/basic.txt"))
         // .addString("manualApproval", "false")
         .toJobParameters());
-
-
-    // Assert
+    
+    assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
+    assertEquals(8, PhoneCallDAO.findAll().size());
+    final List<Bill> allBills = BillDAO.findAll();
+    assertEquals(3, allBills.size());
+    assertTrue(allBills.stream().allMatch(Bill::isSent));
+  }
+  
+  @Test
+  public void parseSmallCallLogWithError() throws Exception {
+    final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
+        .addString("filePath", getPath("/error.txt"))
+        // .addString("manualApproval", "false")
+        .toJobParameters());
+    
     assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
     assertEquals(7, PhoneCallDAO.findAll().size());
     final List<Bill> allBills = BillDAO.findAll();
