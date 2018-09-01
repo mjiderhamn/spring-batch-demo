@@ -9,7 +9,7 @@ import java.time.LocalTime;
 @SuppressWarnings({"WeakerAccess", "unused"})
 public class PhoneCall {
 
-  private static final LocalTime MIDNIGHT = LocalTime.of(0, 0);
+  public static final LocalTime MIDNIGHT = LocalTime.of(0, 0);
 
   private String fromSubscriber;
   

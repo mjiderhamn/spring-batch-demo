@@ -75,6 +75,20 @@ public class JobConfigurationTest {
   }
   
   @Test
+  public void parseLargeCallLog() throws Exception {
+    final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
+        .addString("filePath", getPath("/large.txt"))
+        // .addString("manualApproval", "false")
+        .toJobParameters());
+    
+    assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
+    assertEquals(4000, PhoneCallDAO.findAll().size());
+    final List<Bill> allBills = BillDAO.findAll();
+    assertEquals(150, allBills.size());
+    assertTrue(allBills.stream().allMatch(Bill::isSent));
+  }
+  
+  @Test
   public void parseCallLog_manualConfirmationRequired() throws Exception {
     final JobParameters jobParameters = new JobParametersBuilder()
         .addString("filePath", getPath("/basic.txt"))

@@ -219,7 +219,7 @@ public class JobConfiguration {
 
   private ItemProcessor<? super String, ? extends Bill> createBillsProcessor() {
     return subscriber -> {
-      if(Math.random() < 0.5)
+      if(Math.random() < 0.01) // Lower for larger file
         throw new TimeoutException();
       
       final long noOfCalls = PhoneCallDAO.getTotalNoOfCallsFrom(subscriber);
