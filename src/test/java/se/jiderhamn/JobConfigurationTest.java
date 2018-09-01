@@ -20,6 +20,7 @@ import java.util.List;
 import javax.annotation.Resource;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -103,55 +104,24 @@ public class JobConfigurationTest {
     // Assert
     assertEquals(BatchStatus.STOPPED, jobExecution.getStatus());
     assertEquals(3, jobExecution.getStepExecutions().size());
-    // TODO assert state of data
+    assertEquals("Bills created", 3, BillDAO.findAll().size());
+    assertFalse("No bill sent", BillDAO.findAll().stream().anyMatch(Bill::isSent));
     
     // Try to restart without having manually approved
     final JobExecution executionWithoutApproval = jobLauncher.run(parseCallLog, jobParameters);
     assertEquals(BatchStatus.STOPPED, executionWithoutApproval.getStatus());
     assertEquals(1, executionWithoutApproval.getStepExecutions().size()); // Only deciding step executed
-    // TODO assert state of data unchanged
+    assertFalse("No bill sent", BillDAO.findAll().stream().anyMatch(Bill::isSent));
     
     // Approve and continue
     ApprovalDAO.setManuallyApproved(getPath("/basic.txt"), true); // Pretend manually approved
     final JobExecution restartExecution = jobLauncher.run(parseCallLog, jobParameters);
     assertEquals(BatchStatus.COMPLETED, restartExecution.getStatus());
     assertEquals(3, restartExecution.getStepExecutions().size()); // Incl deciding step
-    // TODO assert state of data changed
+    assertTrue("All bills sent", BillDAO.findAll().stream().allMatch(Bill::isSent));
   }
   
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  
-  // TODO Larger file
-  
-  /** TODO Pretend exception is thrown during processing of file, such as invalid duration */
-  @Ignore // TODO
-  @Test
-  public void exception_processing_input() throws Exception {
-    // Arrange
-
-    // Act
-    final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
-        .addString("filePath", getPath("/basic.txt"))
-        .toJobParameters());
-
-
-    // Assert - no error on batch
-    assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
-    // TODO Assert batch ok
-    
-    // TODO Assert error written on record
-    // assertEquals(ExternalMessageStatus.Error, record2.getStatus());
-    // assertThat(record2.getErrorText(), containsString("Multiple primary identifiers for country 'SE'"));
-
-    // TODO Assert all records tried???
-    /*
-    inOrder.verify(operatorRecipientService).aggregateDataSourceCurrentState(recipientExternalRegistry, record1, false);
-    inOrder.verify(operatorRecipientService).aggregateDataSourceCurrentState(recipientExternalRegistry, record2, false); // Try but fails
-    inOrder.verify(operatorRecipientService).aggregateDataSourceCurrentState(recipientExternalRegistry, record3, false);
-    */
-
-    // TODO Assert invalid record excluded
-  }
   
   /** TODO Pretend exception is throws while sending bills */
   @Ignore // TODO
