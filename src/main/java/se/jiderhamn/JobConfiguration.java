@@ -184,7 +184,7 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope // Alternatively, @StepScope
+  @JobScope // Needed for postponed DAO call. Alternatively use @StepScope
   protected Step createBills() {
     return steps.get("createBills")
         .<String, Bill>chunk(100)
@@ -234,9 +234,7 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope
   protected Step stopForManualApproval() {
-    // TODO Other flow control example
     /*
     SimpleFlow flow2 = new SimpleFlow("stopForManualApprovalFlow");
     flow2.setStateTransitions(Collections.singletonList(StateTransition.createEndStateTransition(new DecisionState(
@@ -269,12 +267,12 @@ public class JobConfiguration {
 
   /** Step that composes updated AggregateParty from data source/external registry */
   @Bean
-  @JobScope
+  @JobScope // Needed for postponed DAO invocation
   Step sendBills() {
     return steps.get("sendBills")
         .<Bill, Bill>chunk(100)
         .reader(new ListItemReader<>(BillDAO.findAll()))
-        .processor((ItemProcessor<Bill, Bill>) Bill::send) // TODO Idempotent
+        .processor((ItemProcessor<Bill, Bill>) Bill::send) // NOTE! This should be idempotent!
         .writer(items -> { }) // No writing - storing is expected to happen in processor
         .listener(new ItemReadListener<Bill>() {
           @Override
