@@ -11,6 +11,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.batch.core.SkipListener;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
@@ -22,6 +23,8 @@ import org.springframework.batch.core.job.builder.FlowBuilder;
 import org.springframework.batch.core.job.flow.FlowExecutionStatus;
 import org.springframework.batch.core.job.flow.JobExecutionDecider;
 import org.springframework.batch.core.job.flow.support.SimpleFlow;
+import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -30,7 +33,6 @@ import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
@@ -63,9 +65,11 @@ public class JobConfiguration {
         .validator(new DefaultJobParametersValidator(new String[] {"filePath"}, new String[] {"manualApproval"}))
         .start(readCallDataFromFile())
         .next(createBills())
-        .next(stopForManualApproval( /* Overridden by expression */))
+        .on("FAILED").to(notifyBillingDepartment())
+        .from(createBills()).on("*").to(stopForManualApproval())
         .next(sendBills())
         .next(notifyDone())
+        .end() // End defining "branched" flow
         .listener(new JobExecutionListener() {
           @Override
           public void beforeJob(JobExecution jobExecution) {
@@ -94,6 +98,16 @@ public class JobConfiguration {
         .build();
   }
 
+  @Bean
+  Step notifyBillingDepartment() {
+    return steps.get("notifyBillingDepartment").tasklet(new Tasklet() {
+      @Override
+      public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        System.out.println("Pretend we are notifying billing department about the error");
+        return RepeatStatus.FINISHED;
+      }
+    }).build();
+  }
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
@@ -224,6 +238,8 @@ public class JobConfiguration {
 
   private ItemProcessor<? super String, ? extends Bill> createBillsProcessor() {
     return subscriber -> {
+      if(true) throw new RuntimeException("Pretend error occurs during bill creation");
+      
       if(Math.random() < 0.01) // Lower for larger file
         throw new TimeoutException();
       
@@ -264,6 +280,7 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
+  @JobScope // Needed for postponed DAO invocation
   Step sendBills() {
     return steps.get("sendBills")
         .<Bill, Bill>chunk(100)
