@@ -2,17 +2,8 @@ package se.jiderhamn;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.ItemProcessListener;
-import org.springframework.batch.core.ItemReadListener;
-import org.springframework.batch.core.ItemWriteListener;
 import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobExecutionListener;
-import org.springframework.batch.core.SkipListener;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.StepExecution;
-import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
@@ -37,7 +28,6 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -66,31 +56,6 @@ public class JobConfiguration {
         .next(stopForManualApproval( /* Overridden by expression */))
         .next(sendBills())
         .next(notifyDone())
-        .listener(new JobExecutionListener() {
-          @Override
-          public void beforeJob(JobExecution jobExecution) {
-            LOG.info("Starting job {}, with parameters {}", jobExecution.getJobInstance(), jobExecution.getJobParameters());
-          }
-
-          @Override
-          public void afterJob(JobExecution jobExecution) {
-            final String path = jobExecution.getJobParameters().getString("filePath");
-            // NOTE! Comparison must be made on exitCode only, which compareTo() does
-            if(ExitStatus.COMPLETED.compareTo(jobExecution.getExitStatus()) == 0) {
-              LOG.info("Job completed successfully for file " + path);
-            }  
-            else if(ExitStatus.FAILED.compareTo(jobExecution.getExitStatus()) == 0) {
-              LOG.info("Job failed for file " + path);
-            }  
-            else if(ExitStatus.STOPPED.compareTo(jobExecution.getExitStatus()) == 0) {
-              LOG.error("Job stopped - file " + path);
-            }
-            else {
-              // ExitStatus.UNKNOWN, ExitStatus.EXECUTING, ExitStatus.NOOP
-              LOG.error("Job exited with status {}", jobExecution.getExitStatus());
-            }
-          }
-        })
         .build();
   }
 
@@ -104,68 +69,6 @@ public class JobConfiguration {
           .skip(FlatFileParseException.class).skipLimit(10)
         .reader(flatFileReader("Overridden by expression"))
         .writer(PhoneCallDAO::persist)
-        .listener(new ItemReadListener<PhoneCall> () {
-          @Override
-          public void beforeRead() {
-            // LOG.info("beforeRead()");
-          }
-
-          @Override
-          public void afterRead(PhoneCall item) {
-            // LOG.info("afterRead() " + item);
-          }
-
-          @Override
-          public void onReadError(Exception ex) {
-            LOG.error("Error reading", ex);
-          }
-        })
-        .listener(new SkipListener<PhoneCall, PhoneCall>() {
-          @Override
-          public void onSkipInRead(Throwable t) {
-            LOG.error("Skip reading call log", t);
-          }
-
-          @Override
-          public void onSkipInWrite(PhoneCall item, Throwable t) {
-            LOG.error("Skip writing call " + item, t);
-          }
-
-          @Override
-          public void onSkipInProcess(PhoneCall item, Throwable t) {
-            LOG.error("Skip processing call" + item, t);
-          }
-        })
-        
-        .listener(new ItemWriteListener<PhoneCall>() {
-
-          @Override
-          public void beforeWrite(List item) {
-            // LOG.info("beforeWrite() " + item);
-          }
-
-          @Override
-          public void afterWrite(List item) {
-            // LOG.info("afterWrite() " + item);
-          }
-
-          @Override
-          public void onWriteError(Exception ex, List items) {
-            LOG.error("onWriteError() " + items, ex);
-          }
-        })
-        .listener(new StepExecutionListener() {
-          @Override
-          public void beforeStep(StepExecution stepExecution) {
-            // *Before* tx started
-            LOG.info("Here we can check pre-conditions (such as duplicate prevention) and log progress");
-          }
-
-          @Override
-          public ExitStatus afterStep(StepExecution stepExecution) {
-            return null;
-          }
-        })
         .build();
   }
 
@@ -193,25 +96,6 @@ public class JobConfiguration {
           .backOffPolicy(new ExponentialBackOffPolicy())
         .reader(phoneCallReader())
         .processor(createBillsProcessor())
-        .listener(new ItemProcessListener<String, Bill>() {
-          @Override
-          public void beforeProcess(String item) {
-            LOG.info("beforeProcess() " + item);
-          }
-
-          @Override
-          public void afterProcess(String item, Bill result) {
-            LOG.info("afterProcess() " + item + " => " + result);
-          }
-
-          @Override
-          public void onProcessError(String item, Exception e) {
-            if(e instanceof TimeoutException)
-              LOG.info("onProcessError: Timed out processing " + item + " - will retry");
-            else
-              LOG.error("onProcessError: " + item, e);
-          }
-        })
         .writer(BillDAO::persist)
         .build();
   }
@@ -270,38 +154,6 @@ public class JobConfiguration {
         .reader(billReader())
         .processor((ItemProcessor<Bill, Bill>) Bill::send) // NOTE! This should be idempotent!
         .writer(items -> { }) // No writing - storing is expected to happen in processor
-        .listener(new ItemReadListener<Bill>() {
-          @Override
-          public void beforeRead() {
-            LOG.info("Before reading bills");
-          }
-
-          @Override
-          public void afterRead(Bill item) {
-            LOG.warn("sendBills read " + item);
-          }
-
-          @Override
-          public void onReadError(Exception ex) {
-
-          }
-        })
-        .listener(new SkipListener<Bill, Bill>() {
-          @Override
-          public void onSkipInRead(Throwable t) {
-            LOG.error("Error reading bill - skipping", t);
-          }
-
-          @Override
-          public void onSkipInWrite(Bill item, Throwable t) {
-            LOG.error("Error writing bill - skipping " + item, t);
-          }
-
-          @Override
-          public void onSkipInProcess(Bill item, Throwable t) {
-            LOG.error("Error processing bill - skipping" + item, t);
-          }
-        })
         .build();
   }
 
