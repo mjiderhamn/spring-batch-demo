@@ -33,6 +33,7 @@ import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
@@ -280,7 +281,6 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope // Needed for postponed DAO invocation
   Step sendBills() {
     return steps.get("sendBills")
         .<Bill, Bill>chunk(100)

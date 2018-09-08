@@ -116,5 +116,5 @@ public class JobConfigurationTest {
     assertEquals(4, restartExecution.getStepExecutions().size()); // Incl deciding step
     assertTrue("All bills sent", BillDAO.findAll().stream().allMatch(Bill::isSent));
   }
-  
+ 
 }
