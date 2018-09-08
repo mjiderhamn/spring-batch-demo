@@ -1,7 +1,6 @@
 package se.jiderhamn;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.batch.core.BatchStatus;
@@ -51,7 +50,6 @@ public class JobConfigurationTest {
   public void parseSmallCallLog() throws Exception {
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
         .addString("filePath", getPath("/basic.txt"))
-        // .addString("manualApproval", "false")
         .toJobParameters());
     
     assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
@@ -65,7 +63,6 @@ public class JobConfigurationTest {
   public void parseSmallCallLogWithError() throws Exception {
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
         .addString("filePath", getPath("/error.txt"))
-        // .addString("manualApproval", "false")
         .toJobParameters());
     
     assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
@@ -79,7 +76,6 @@ public class JobConfigurationTest {
   public void parseLargeCallLog() throws Exception {
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
         .addString("filePath", getPath("/large.txt"))
-        // .addString("manualApproval", "false")
         .toJobParameters());
     
     assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
@@ -119,31 +115,6 @@ public class JobConfigurationTest {
     assertEquals(BatchStatus.COMPLETED, restartExecution.getStatus());
     assertEquals(3, restartExecution.getStepExecutions().size()); // Incl deciding step
     assertTrue("All bills sent", BillDAO.findAll().stream().allMatch(Bill::isSent));
-  }
-  
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  
-  /** TODO Pretend exception is throws while sending bills */
-  @Ignore // TODO
-  @Test
-  public void exception_sending_bills() throws Exception {
-    // Arrange
-
-    // Act
-    final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
-        .addString("filePath", getPath("/basic.txt"))
-        .toJobParameters());
-
-
-    // Assert - no error on batch
-    assertEquals(BatchStatus.COMPLETED, jobExecution.getStatus());
-    // TODO Assert data
-    
-
-    // No need to check current state step
-
-    // Assert combination step
-    // TODO Assert item after error is processed
   }
   
 }

@@ -57,13 +57,9 @@ public class JobConfiguration {
   @Bean(name = JOB_PARSE_CALL_LOG)
   protected Job parseCallLogJob(JobBuilderFactory jobs) {
     return jobs.get(JOB_PARSE_CALL_LOG)
-        // .preventRestart()
         .validator(new DefaultJobParametersValidator(new String[] {"filePath"}, new String[] {"manualApproval"}))
         .start(readCallDataFromFile("OVERRIDDEN_BY_EXPRESSION"))
         .next(createBills())
-//        .next(decideOnManualApproval()).on(FlowExecutionStatus.STOPPED.getName()).stopAndRestart(sendBills())
-//        .from(decideOnManualApproval()).on("*").to(sendBills())
-//        .end()
         .next(stopForManualApproval( /* Overridden by expression */))
         .next(sendBills())
         .next(notifyDone())
@@ -236,16 +232,11 @@ public class JobConfiguration {
 
   @Bean
   protected Step stopForManualApproval() {
-    /*
-    SimpleFlow flow2 = new SimpleFlow("stopForManualApprovalFlow");
-    flow2.setStateTransitions(Collections.singletonList(StateTransition.createEndStateTransition(new DecisionState(
-        decider, "stopForManualApprovalState"))));
-    */
-
     return steps.get("stopForManualApprovalStep")
         .flow(new FlowBuilder<SimpleFlow>("stopForManualApprovalFlow")
           .start(decideOnManualApproval())
           .on("*").end()
+// Prevented by BATCH-2747
 //          .start(decideOnManualApproval()).on(FlowExecutionStatus.STOPPED.getName()).stopAndRestart(sendBills())
 //          .from(decideOnManualApproval()).on("*").to(sendBills())
           .build())
@@ -266,7 +257,6 @@ public class JobConfiguration {
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  /** Step that composes updated AggregateParty from data source/external registry */
   @Bean
   @JobScope // Needed for postponed DAO invocation
   Step sendBills() {
