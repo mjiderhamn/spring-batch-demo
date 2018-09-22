@@ -16,12 +16,14 @@ import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.DefaultJobParametersValidator;
 import org.springframework.batch.core.job.builder.FlowBuilder;
 import org.springframework.batch.core.job.flow.FlowExecutionStatus;
 import org.springframework.batch.core.job.flow.JobExecutionDecider;
 import org.springframework.batch.core.job.flow.support.SimpleFlow;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.FlatFileParseException;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
@@ -46,19 +48,20 @@ import java.util.concurrent.TimeoutException;
 public class JobConfiguration {
 
   private static final Logger LOG = LoggerFactory.getLogger("JobConfiguration");
-  
-  static final String JOB_PARSE_CALL_LOG = "parseCallLogJob";
 
   @Autowired
   private StepBuilderFactory steps;
+  
+  @Autowired
+  private JobBuilderFactory jobs;
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   
-  @Bean(name = JOB_PARSE_CALL_LOG)
-  protected Job parseCallLogJob(JobBuilderFactory jobs) {
-    return jobs.get(JOB_PARSE_CALL_LOG)
+  @Bean(name = "parseCallLogJob")
+  protected Job parseCallLogJob() {
+    return jobs.get("parseCallLog")
         .validator(new DefaultJobParametersValidator(new String[] {"filePath"}, new String[] {"manualApproval"}))
-        .start(readCallDataFromFile("OVERRIDDEN_BY_EXPRESSION"))
+        .start(readCallDataFromFile())
         .next(createBills())
         .next(stopForManualApproval( /* Overridden by expression */))
         .next(sendBills())
@@ -94,13 +97,12 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope // Needed for @Value (Alternatively, @StepScope)
-  Step readCallDataFromFile(@Value("#{jobParameters[filePath]}") String filePath) {
+  Step readCallDataFromFile() {
     return steps.get("readCallDataFromFile")
         .<PhoneCall, PhoneCall>chunk(100) // Commit-limit
         .faultTolerant()
           .skip(FlatFileParseException.class).skipLimit(10)
-        .reader(flatFileReader(filePath))
+        .reader(flatFileReader("Overridden by expression"))
         .writer(PhoneCallDAO::persist)
         .listener(new ItemReadListener<PhoneCall> () {
           @Override
@@ -167,7 +169,9 @@ public class JobConfiguration {
         .build();
   }
 
-  private FlatFileItemReader<PhoneCall> flatFileReader(String filePath) {
+  @Bean
+  @JobScope // Needed for @Value
+  FlatFileItemReader<PhoneCall> flatFileReader(@Value("#{jobParameters[filePath]}") String filePath) {
     return new FlatFileItemReaderBuilder<PhoneCall>()
         .name("callLogReader")
         .resource(new FileSystemResource(filePath))
@@ -180,7 +184,6 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope // Needed for postponed DAO call. Alternatively use @StepScope
   protected Step createBills() {
     return steps.get("createBills")
         .<String, Bill>chunk(100)
@@ -188,7 +191,7 @@ public class JobConfiguration {
           .retry(TimeoutException.class)
           .retryLimit(10)
           .backOffPolicy(new ExponentialBackOffPolicy())
-        .reader(new ListItemReader<>(PhoneCallDAO.getSubscribers()))
+        .reader(phoneCallReader())
         .processor(createBillsProcessor())
         .listener(new ItemProcessListener<String, Bill>() {
           @Override
@@ -212,6 +215,12 @@ public class JobConfiguration {
         .writer(BillDAO::persist)
         .build();
   }
+  
+  @Bean
+  @StepScope // Needed for postponed DAO invocation
+  ItemReader<String> phoneCallReader() {
+    return new ListItemReader<>(PhoneCallDAO.getSubscribers());
+  }
 
   private ItemProcessor<? super String, ? extends Bill> createBillsProcessor() {
     return subscriber -> {
@@ -234,11 +243,8 @@ public class JobConfiguration {
   protected Step stopForManualApproval() {
     return steps.get("stopForManualApprovalStep")
         .flow(new FlowBuilder<SimpleFlow>("stopForManualApprovalFlow")
-          .start(decideOnManualApproval())
-          .on("*").end()
-// Prevented by BATCH-2747
-//          .start(decideOnManualApproval()).on(FlowExecutionStatus.STOPPED.getName()).stopAndRestart(sendBills())
-//          .from(decideOnManualApproval()).on("*").to(sendBills())
+          .start(decideOnManualApproval()).on(FlowExecutionStatus.STOPPED.getName()).stopAndRestart(sendBills())
+          .from(decideOnManualApproval()).on("*").to(sendBills())
           .build())
         .build();
   }
@@ -258,11 +264,10 @@ public class JobConfiguration {
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Bean
-  @JobScope // Needed for postponed DAO invocation
   Step sendBills() {
     return steps.get("sendBills")
         .<Bill, Bill>chunk(100)
-        .reader(new ListItemReader<>(BillDAO.findAll()))
+        .reader(billReader())
         .processor((ItemProcessor<Bill, Bill>) Bill::send) // NOTE! This should be idempotent!
         .writer(items -> { }) // No writing - storing is expected to happen in processor
         .listener(new ItemReadListener<Bill>() {
@@ -298,6 +303,12 @@ public class JobConfiguration {
           }
         })
         .build();
+  }
+
+  @Bean
+  @StepScope // Needed for postponed DAO invocation
+  ListItemReader<Bill> billReader() {
+    return new ListItemReader<>(BillDAO.findAll());
   }
 
   @Bean

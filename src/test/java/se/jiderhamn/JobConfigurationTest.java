@@ -33,7 +33,7 @@ public class JobConfigurationTest {
   @Autowired
   private JobLauncher jobLauncher;
   
-  @Resource(name = JobConfiguration.JOB_PARSE_CALL_LOG)
+  @Resource(name = "parseCallLogJob")
   private Job parseCallLog;
   
   @Before
@@ -60,7 +60,7 @@ public class JobConfigurationTest {
   }
   
   @Test
-  public void parseSmallCallLogWithError() throws Exception {
+  public void parseSmallCallLogWithSkippableError() throws Exception {
     final JobExecution jobExecution = jobLauncher.run(parseCallLog, new JobParametersBuilder()
         .addString("filePath", getPath("/error.txt"))
         .toJobParameters());
@@ -113,7 +113,7 @@ public class JobConfigurationTest {
     ApprovalDAO.setManuallyApproved(getPath("/basic.txt"), true); // Pretend manually approved
     final JobExecution restartExecution = jobLauncher.run(parseCallLog, jobParameters);
     assertEquals(BatchStatus.COMPLETED, restartExecution.getStatus());
-    assertEquals(3, restartExecution.getStepExecutions().size()); // Incl deciding step
+    assertEquals(4, restartExecution.getStepExecutions().size()); // Incl deciding step
     assertTrue("All bills sent", BillDAO.findAll().stream().allMatch(Bill::isSent));
   }
   
